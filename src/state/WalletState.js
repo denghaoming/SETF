@@ -9,7 +9,7 @@ class WalletState {
 
     config = {
         //test
-        Sale: "0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
+        Sale: "0xb6dfA3e8edF19361313f89A4ACe30533dA12BC96"
         //bsc
         //Sale:"0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
     }

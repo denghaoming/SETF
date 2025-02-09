@@ -270,6 +270,7 @@ class Sale extends Component {
 
             //获取每日兑换奖励列表
             let tokenRewardList = [];
+            startIndex = 0;
             while (true) {
                 //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
                 let results = await poolContract.methods
