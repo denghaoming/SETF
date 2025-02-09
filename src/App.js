@@ -5,8 +5,6 @@ import WalletState, { CHAIN_ID, CHAIN_ERROR_TIP } from './state/WalletState'
 import toast from './components/toast/toast'
 import "./common.css"
 import './App.css'
-import MintPool from './pages/MintPool/MintPool'
-import Burn from './pages/Burn/Burn'
 import Sale from './pages/Sale/Sale'
 
 class App extends Component {
@@ -74,8 +72,7 @@ class App extends Component {
                     <div>
                         <Routes>
                             <Route path="/" exact element={<Sale />}></Route>
-                            <Route path="/mint" exact element={<MintPool />}></Route>
-                            <Route path="/burn" exact element={<Burn />}></Route>
+                            <Route path="/sale" exact element={<Sale />}></Route>
                         </Routes>
                     </div>
                 </div>

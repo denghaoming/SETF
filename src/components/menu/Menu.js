@@ -76,8 +76,7 @@ class Menu extends Component {
                     <div className="Menu-Container">
                         <ul>
                             <li onClick={this.routerTo.bind(this, "/")}>首页</li>
-                            <li onClick={this.routerTo.bind(this, "/burn")}>燃烧</li>
-                            <li onClick={this.routerTo.bind(this, "/mint")}>质押</li>
+                            <li onClick={this.routerTo.bind(this, "/sale")}>预售兑换</li>
                         </ul>
                     </div>
                     <div className="flex-1" onClick={this.hideMenu}></div>

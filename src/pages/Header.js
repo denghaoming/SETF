@@ -70,7 +70,7 @@ class Header extends Component {
                 <div className='menu'>
                     <Menu></Menu>
                 </div>
-                <div className='HTitle flex center'>SuperATM</div>
+                <div className='HTitle flex center'>SSETF</div>
                 <div className='account'>
                     <img className='Icon' src={IconUser}></img>
                     <div >{showAccount(this.state.account)}</div>
