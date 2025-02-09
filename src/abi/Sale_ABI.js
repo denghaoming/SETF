@@ -1043,6 +1043,11 @@ export const Sale_ABI = [
 				"internalType": "uint256",
 				"name": "blockTime",
 				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "destroyToken",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",

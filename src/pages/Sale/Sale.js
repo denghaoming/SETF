@@ -7,7 +7,7 @@ import toast from '../../components/toast/toast'
 import Web3 from 'web3'
 import { ERC20_ABI } from "../../abi/erc20"
 import { Sale_ABI } from '../../abi/Sale_ABI'
-import { showCountdownTime, showFromWei, showAccount, toWei, showLongAccount, getRef } from '../../utils'
+import { showCountdownTime, showFromWei, showAccount, toWei, showLongAccount, getRef, showLongLongAccount } from '../../utils'
 import BN from 'bn.js'
 
 import moment from 'moment'
@@ -15,7 +15,7 @@ import copy from 'copy-to-clipboard';
 
 import Header from '../Header';
 
-class MintPool extends Component {
+class Sale extends Component {
     state = {
         chainId: 0,
         account: "",
@@ -24,8 +24,10 @@ class MintPool extends Component {
         chainSymbol: 'BNB',
         inputAmount: '',
         inviteFees: [],
-        tokenRewardList: tokenRewardList,
-        partnerRewardList: partnerRewardList,
+        tokenRewardList: [],
+        partnerRewardList: [],
+        saleCountdownTime: [],
+        binderList: [],
     }
     constructor(props) {
         super(props);
@@ -78,7 +80,7 @@ class MintPool extends Component {
     async getInfo() {
         try {
             const web3 = new Web3(Web3.givenProvider);
-            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
+            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.Sale);
 
             //获取基本信息
             const baseInfo = await poolContract.methods.getBaseInfo().call();
@@ -96,6 +98,8 @@ class MintPool extends Component {
             let tokenSymbol = baseInfo[5];
             //区块时间戳，单位：秒
             let blockTime = parseInt(baseInfo[6]);
+            //销毁代币数量
+            let destroyToken = new BN(baseInfo[7], 10);
 
             //预售信息
             const saleInfo = await poolContract.methods.getSaleInfo().call();
@@ -103,10 +107,10 @@ class MintPool extends Component {
             let pauseBuy = saleInfo[0];
             //1U对应多少币
             let tokenPerUsdt = new BN(saleInfo[1], 10);
-            //结束时间
-            let endTime = parseInt(saleInfo[2]);
             //最少认购多少U
-            let minUsdt = new BN(saleInfo[3], 10);
+            let minUsdt = new BN(saleInfo[2], 10);
+            //结束时间
+            let endTime = parseInt(saleInfo[3]);
             //一共多少代币
             let qtyToken = new BN(saleInfo[4], 10);
             //卖了多少代币
@@ -132,7 +136,8 @@ class MintPool extends Component {
             //代币价格
             let tokenPrice = toWei('1', usdtDecimals).mul(toWei('1', tokenDecimals)).div(tokenPerUsdt)
             //销售进度
-            let saleProgress = parseInt(new BN(10000).mul(totalSaleToken).div(qtyToken).toNumber()) / 100;
+            let progress = new BN(10000).mul(totalSaleToken).div(qtyToken);
+            let saleProgress = parseInt(progress.toNumber()) / 100;
 
             //分红信息
             const dividendInfo = await poolContract.methods.getDividendInfo().call();
@@ -161,8 +166,9 @@ class MintPool extends Component {
                 blockTime: blockTime,
                 endTime: this.formatTime(endTime),
                 minUsdt: minUsdt,
-                showMinAmount: showFromWei(minUsdt, usdtDecimals, 2),
+                showMinUsdt: showFromWei(minUsdt, usdtDecimals, 2),
                 releaseRate: releaseRate / 100,
+                totalSaleToken: showFromWei(totalSaleToken, tokenDecimals, 2),
                 qtyToken: showFromWei(qtyToken, tokenDecimals, 2),
                 saleProgress: saleProgress,
                 startReleaseTime: this.formatTime(startReleaseTime),
@@ -175,7 +181,11 @@ class MintPool extends Component {
                 totalPartnerReward: showFromWei(totalPartnerReward, usdtDecimals, 2),
                 totalReward: showFromWei(totalReward, usdtDecimals, 2),
                 partnerCondition: showFromWei(partnerCondition, tokenDecimals, 2),
+                destroyToken: showFromWei(destroyToken, tokenDecimals, 2),
             });
+
+            let startIndex = 0;
+            let pageSize = 200;
 
             let account = WalletState.wallet.account;
             if (account) {
@@ -225,16 +235,41 @@ class MintPool extends Component {
                     showUsdtBalance: showFromWei(usdtBalance, usdtDecimals, 2),
                     usdtAllowance: usdtAllowance,
                     tokenAmount: showFromWei(tokenAmount, tokenDecimals, 2),
+                    pendingToken: showFromWei(pendingToken, tokenDecimals, 4),
+                    releseToken: showFromWei(releseToken, tokenDecimals, 4),
                     inviteReward: showFromWei(inviteReward, usdtDecimals, 4),
                     tokenReward: showFromWei(tokenReward, usdtDecimals, 4),
                     partnerReward: showFromWei(partnerReward, usdtDecimals, 4),
                 })
+
+                let binderList = [];
+                while (true) {
+                    let results = await poolContract.methods
+                        .getBinderList(account, startIndex, pageSize)
+                        .call();
+                    let binderRet = results[0];
+                    let len = binderRet.length;
+                    for (let i = 0; i < len; ++i) {
+                        let binder = binderRet[i];
+
+                        binderList.push({
+                            binder: binder,
+                            showBinder: showLongLongAccount(binder),
+                        });
+                    }
+
+                    startIndex += pageSize;
+                    if (len < pageSize) {
+                        break;
+                    }
+                }
+                this.setState({
+                    binderList: binderList,
+                });
             }
 
             //获取每日兑换奖励列表
             let tokenRewardList = [];
-            let startIndex = 0;
-            let pageSize = 200;
             while (true) {
                 //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
                 let results = await poolContract.methods
@@ -311,43 +346,47 @@ class MintPool extends Component {
 
     //输入监听
     handleInputAmountChange(event) {
-        let value = this.inputAmount;
+        let value = this.state.inputAmount;
         if (event.target.validity.valid) {
             value = event.target.value;
         }
         this.setState({ inputAmount: value });
     }
 
-    //充值质押
-    async deposit(index, e) {
+    //购买
+    async buy() {
         let account = WalletState.wallet.account;
         if (!account) {
             this.connectWallet();
             return;
         }
-        let amount = this.state.depositAmounts[index];
-        let cost = toWei(amount, this.state.tokenDecimals);
-        if (cost.lt(this.state.minAmount)) {
-            toast.show("至少质押" + this.state.showMinAmount);
+        let amount = this.state.inputAmount;
+        if (!amount) {
+            toast.show("至少购买" + this.state.showMinUsdt);
+            return;
+        }
+        let cost = toWei(amount, this.state.usdtDecimals);
+        if (cost.lt(this.state.minUsdt)) {
+            toast.show("至少购买" + this.state.showMinUsdt);
             return;
         }
         loading.show();
         try {
             const web3 = new Web3(Web3.givenProvider);
-            let tokenBalance = this.state.tokenBalance;
-            if (tokenBalance.lt(cost)) {
-                toast.show(this.state.tokenSymbol + "余额不足");
+            let usdtBalance = this.state.usdtBalance;
+            if (usdtBalance.lt(cost)) {
+                toast.show(this.state.usdtSymbol + "余额不足");
                 return;
             }
-            let approvalNum = this.state.tokenAllowance;
+            let approvalNum = this.state.usdtAllowance;
             let gasPrice = await web3.eth.getGasPrice();
             gasPrice = new BN(gasPrice, 10);
             //授权额度不够了，需要重新授权
             if (approvalNum.lt(cost)) {
-                const tokenContract = new web3.eth.Contract(ERC20_ABI, this.state.tokenAddress);
-                let estimateGas = await tokenContract.methods.approve(WalletState.config.MintPool, MAX_INT).estimateGas({ from: account });
+                const tokenContract = new web3.eth.Contract(ERC20_ABI, this.state.usdtAddress);
+                let estimateGas = await tokenContract.methods.approve(WalletState.config.Sale, MAX_INT).estimateGas({ from: account });
                 estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-                let transaction = await tokenContract.methods.approve(WalletState.config.MintPool, MAX_INT).send({
+                let transaction = await tokenContract.methods.approve(WalletState.config.Sale, MAX_INT).send({
                     from: account,
                     gas: estimateGas,
                     gasPrice: gasPrice,
@@ -360,21 +399,22 @@ class MintPool extends Component {
             //上级
             let invitor = getRef();
             if (!invitor) {
-                invitor = ZERO_ADDRESS;
+                //默认首码地址
+                invitor = this.state.defaultInvitor;
             }
-            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
-            //质押
-            let estimateGas = await poolContract.methods.deposit(index, cost, invitor).estimateGas({ from: account });
+            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.Sale);
+            //购买
+            let estimateGas = await poolContract.methods.buy(cost, invitor).estimateGas({ from: account });
             estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-            let transaction = await poolContract.methods.deposit(index, cost, invitor).send({
+            let transaction = await poolContract.methods.buy(cost, invitor).send({
                 from: account,
                 gas: estimateGas,
                 gasPrice: gasPrice,
             });
             if (transaction.status) {
-                toast.show("质押成功");
+                toast.show("购买成功");
             } else {
-                toast.show("质押失败");
+                toast.show("购买失败");
             }
         } catch (e) {
             console.log("e", e);
@@ -384,54 +424,8 @@ class MintPool extends Component {
         }
     }
 
-    //赎回数量监听
-    handleWithdrawAmountChange(id, event) {
-        let withdrawAmounts = this.state.withdrawAmounts;
-        let value = withdrawAmounts[id];
-        if (event.target.validity.valid) {
-            value = event.target.value;
-        }
-        withdrawAmounts[id] = value;
-        this.setState({ withdrawAmounts: withdrawAmounts });
-    }
-
-    //赎回
-    async withdraw(index) {
-        let account = WalletState.wallet.account;
-        if (!account) {
-            this.connectWallet();
-            return;
-        }
-        let amount = this.state.withdrawAmounts[index];
-        let cost = toWei(amount, this.state.tokenDecimals);
-        loading.show();
-        try {
-            const web3 = new Web3(Web3.givenProvider);
-            let gasPrice = await web3.eth.getGasPrice();
-            gasPrice = new BN(gasPrice, 10);
-            const presaleContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
-            let estimateGas = await presaleContract.methods.withdraw(index, cost).estimateGas({ from: account });
-            estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-            let transaction = await presaleContract.methods.withdraw(index, cost).send({
-                from: account,
-                gas: estimateGas,
-                gasPrice: gasPrice,
-            });
-            if (transaction.status) {
-                toast.show("赎回成功");
-            } else {
-                toast.show("赎回失败");
-            }
-        } catch (e) {
-            console.log("e", e);
-            toast.show(e.message);
-        } finally {
-            loading.hide();
-        }
-    }
-
-    //领取池子收益
-    async claim(index) {
+    //领取代币
+    async claimToken() {
         let account = WalletState.wallet.account;
         if (!account) {
             this.connectWallet();
@@ -442,10 +436,10 @@ class MintPool extends Component {
             const web3 = new Web3(Web3.givenProvider);
             let gasPrice = await web3.eth.getGasPrice();
             gasPrice = new BN(gasPrice, 10);
-            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
-            let estimateGas = await poolContract.methods.claim(index).estimateGas({ from: account });
+            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.Sale);
+            let estimateGas = await poolContract.methods.claimToken().estimateGas({ from: account });
             estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-            let transaction = await poolContract.methods.claim(index).send({
+            let transaction = await poolContract.methods.claimToken().send({
                 from: account,
                 gas: estimateGas,
                 gasPrice: gasPrice,
@@ -463,8 +457,8 @@ class MintPool extends Component {
         }
     }
 
-    //领取全部
-    async harvestAll() {
+    //领取邀请奖励
+    async claimInvite() {
         let account = WalletState.wallet.account;
         if (!account) {
             this.connectWallet();
@@ -475,10 +469,10 @@ class MintPool extends Component {
             const web3 = new Web3(Web3.givenProvider);
             let gasPrice = await web3.eth.getGasPrice();
             gasPrice = new BN(gasPrice, 10);
-            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
-            let estimateGas = await poolContract.methods.harvestAll().estimateGas({ from: account });
+            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.Sale);
+            let estimateGas = await poolContract.methods.claimInvite().estimateGas({ from: account });
             estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-            let transaction = await poolContract.methods.harvestAll().send({
+            let transaction = await poolContract.methods.claimInvite().send({
                 from: account,
                 gas: estimateGas,
                 gasPrice: gasPrice,
@@ -496,8 +490,8 @@ class MintPool extends Component {
         }
     }
 
-    //领取NFT
-    async claimNFT() {
+    //领取分红
+    async claim() {
         let account = WalletState.wallet.account;
         if (!account) {
             this.connectWallet();
@@ -508,10 +502,10 @@ class MintPool extends Component {
             const web3 = new Web3(Web3.givenProvider);
             let gasPrice = await web3.eth.getGasPrice();
             gasPrice = new BN(gasPrice, 10);
-            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.MintPool);
-            let estimateGas = await poolContract.methods.claimNFT().estimateGas({ from: account });
+            const poolContract = new web3.eth.Contract(Sale_ABI, WalletState.config.Sale);
+            let estimateGas = await poolContract.methods.claim().estimateGas({ from: account });
             estimateGas = new BN(estimateGas, 10).mul(new BN(150)).div(new BN(100));
-            let transaction = await poolContract.methods.claimNFT().send({
+            let transaction = await poolContract.methods.claim().send({
                 from: account,
                 gas: estimateGas,
                 gasPrice: gasPrice,
@@ -557,78 +551,166 @@ class MintPool extends Component {
                 <Header></Header>
                 <div className='Module ModuleTop'>
                     <div className='ModuleContentWitdh RuleTitle'>
-                        <div>质押总量</div>
-                        <div>{this.state.showTotalLockAmount} {this.state.tokenSymbol}</div>
-                    </div>
-                    <div className='ModuleContentWitdh RuleTitle'>
-                        <div>每日产出</div>
-                        <div>{this.state.showTotalRewardOneDay} {this.state.tokenSymbol}</div>
-                    </div>
-                    <div className='ModuleContentWitdh RuleTitle'>
-                        <div>矿池余额</div>
-                        <div>{this.state.poolRewardBalance} {this.state.tokenSymbol}</div>
+                        <div>预售价格</div>
+                        <div>1 {this.state.tokenSymbol} = {this.state.tokenPrice} USDT</div>
                     </div>
                     <div className='ModuleContentWitdh RuleTitle mt10'>
-                        <div>区块时间</div>
-                        <div>{this.state.showBlockTime}</div>
+                        <div>倒计时</div>
+                        <div>{this.state.saleCountdownTime[0]}:{this.state.saleCountdownTime[1]}:{this.state.saleCountdownTime[2]}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>预售总量</div>
+                        <div>{this.state.totalSaleToken}/{this.state.qtyToken} {this.state.tokenSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>预售进度</div>
+                        <div>{this.state.saleProgress}%</div>
                     </div>
                 </div>
 
                 <div className='Module ModuleTop'>
                     <div className='ModuleContentWitdh RuleTitle'>
                         <div>我的余额</div>
-                        <div>{this.state.showTokenBalance} {this.state.tokenSymbol}</div>
+                        <div>{this.state.showUsdtBalance} {this.state.usdtSymbol}</div>
                     </div>
-
-                    <div className='ModuleContentWitdh RuleTitle'>
-                        <div>累计领取</div>
-                        <div>{this.state.showAccClaimed} {this.state.tokenSymbol}</div>
-                    </div>
-
-                    <div className='ModuleContentWitdh RuleTitle'>
-                        <div>待领取</div>
-                        <div>{this.state.showTotalPending} {this.state.tokenSymbol}</div>
-                    </div>
-
                     <div className='ModuleContentWitdh RuleTitle mt10'>
-                        <div></div>
-                        <div className='rbutton' onClick={this.harvestAll.bind(this)}>领取</div>
+                        <input className="InputBg flex-1" type="text" value={this.state.inputAmount} onChange={this.handleInputAmountChange.bind(this)} placeholder={'输入购买数量,至少' + this.state.showMinUsdt} pattern="[0-9]*" />
+                        <div className='rbutton' onClick={this.buy.bind(this)}>购买</div>
                     </div>
                 </div>
-                {this.state.poolInfos.map((item, index) => {
-                    return <div className='Module ModuleTop' key={index}>
-                        <div className='ModuleContentWitdh RuleTitle'>
-                            <div>锁定周期</div>
-                            <div>{item.showLockDuration} 天</div>
-                        </div>
-                        <div className='ModuleContentWitdh RuleTitle mt10'>
-                            <input className="InputBg flex-1" type="text" value={this.state.depositAmounts[index]} onChange={this.handleDepositAmountChange.bind(this, index)} placeholder={'输入质押数量,至少' + this.state.showMinAmount} pattern="[0-9.]*" />
-                            <div className='rbutton' onClick={this.deposit.bind(this, index)}>质押</div>
-                        </div>
-                        <div className='ModuleContentWitdh RuleTitle mt20'>
-                            <div>我的质押</div>
-                            <div>{this.state.userInfos[index].showAmount}</div>
-                        </div>
 
-                        <div className='ModuleContentWitdh RuleTitle'>
-                            <div>解锁时间</div>
-                            <div>{this.state.userInfos[index].showUnclockTime}</div>
-                        </div>
-                        <div className='ModuleContentWitdh RuleTitle mt10'>
-                            <input className="InputBg flex-1" type="text" value={this.state.withdrawAmounts[index]} onChange={this.handleWithdrawAmountChange.bind(this, index)} placeholder={'输入赎回数量'} pattern="[0-9.]*" />
-                            <div className='sbutton' onClick={this.withdraw.bind(this, index)}>赎回</div>
-                        </div>
+                <div className='Module ModuleTop'>
+                    <div className='ModuleContentWitdh RuleTitle '>
+                        <div>上级邀请人</div>
+                        <div>{showLongAccount(this.state.invitor)}</div>
                     </div>
-                })}
+                    <div className='prettyBg button mt10' onClick={this.invite.bind(this)}>邀请好友</div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>邀请人数</div>
+                        <div>{this.state.binderLen}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>团队人数</div>
+                        <div>{this.state.teamNum}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle mt5'>
+                        <div>邀请奖励</div>
+                        <div>{this.state.inviteReward}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle mt10'>
+                        <div></div>
+                        <div className='rbutton' onClick={this.claimInvite.bind(this)}>领取</div>
+                    </div>
+                </div>
+
                 <div className='Module ModuleTop'>
                     <div className='ModuleContentWitdh RuleTitle'>
-                        <div>质押{this.state.showNFTAmount}领取NFT，仅可领取一次</div>
-                        <div>{this.state.claimedNFT ? "已领取" : this.state.stakeAmount.lt(this.state.nftAmount) ? "未达标" : "达标"}</div>
+                        <div>直推人数</div>
+                        <div>{this.state.binderLen}</div>
+                    </div>
+
+                    {this.state.binderList.map((item, index) => {
+                        return <div className='ModuleContentWitdh RuleTitle mt5'>
+                            <div>{index + 1}. {item.showBinder}</div>
+                            <div></div>
+                        </div>
+                    })}
+                </div>
+
+                <div className='Module ModuleTop'>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>合伙人达标</div>
+                        <div>{this.state.tokenAmount}/{this.state.partnerCondition}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>是否合伙人</div>
+                        <div>{this.state.isPartner ? "是" : "否"}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle mt10'>
+                        <div>释放代币 (结束后每日释放{this.state.releaseRate}%)</div>
+                        <div>{this.state.releseToken} {this.state.tokenSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>待领取代币</div>
+                        <div>{this.state.pendingToken} {this.state.tokenSymbol}</div>
                     </div>
                     <div className='ModuleContentWitdh RuleTitle mt10'>
                         <div></div>
-                        <div className='rbutton' onClick={this.claimNFT.bind(this)}>领取</div>
+                        <div className='rbutton' onClick={this.claimToken.bind(this)}>领取</div>
                     </div>
+                </div>
+
+                <div className='Module ModuleTop'>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>全网销毁</div>
+                        <div>{this.state.destroyToken} {this.state.tokenSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle mt5'>
+                        <div>全网分红</div>
+                        <div>{this.state.totalReward} {this.state.usdtSymbol}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>兑换分红</div>
+                        <div>{this.state.totalTokenReward} {this.state.usdtSymbol}</div>
+                    </div>
+
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>合伙分红</div>
+                        <div>{this.state.totalPartnerReward} {this.state.usdtSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle mt10'>
+                        <div>个人兑换/总量</div>
+                        <div>{this.state.tokenAmount}/{this.state.totalSaleToken} {this.state.tokenSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>待领取兑换分红</div>
+                        <div>{this.state.tokenReward} {this.state.usdtSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle mt10'>
+                        <div>是否合伙/合伙总数</div>
+                        <div>{this.state.isPartner ? "是" : "否"}/{this.state.partnerAmount}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>待领取合伙分红</div>
+                        <div>{this.state.partnerReward} {this.state.usdtSymbol}</div>
+                    </div>
+                    <div className='ModuleContentWitdh RuleTitle mt10'>
+                        <div></div>
+                        <div className='rbutton' onClick={this.claim.bind(this)}>领取</div>
+                    </div>
+                </div>
+
+                <div className='Module ModuleTop'>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>兑换分红记录</div>
+                        <div></div>
+                    </div>
+
+                    {this.state.tokenRewardList.map((item, index) => {
+                        return <div className='ModuleContentWitdh RuleTitle mt5'>
+                            <div>{item.date}</div>
+                            <div>{item.reward} {this.state.usdtSymbol}</div>
+                        </div>
+                    })}
+                </div>
+
+                <div className='Module ModuleTop'>
+                    <div className='ModuleContentWitdh RuleTitle'>
+                        <div>合伙分红分红记录</div>
+                        <div></div>
+                    </div>
+
+                    {this.state.partnerRewardList.map((item, index) => {
+                        return <div className='ModuleContentWitdh RuleTitle mt5'>
+                            <div>{item.date}</div>
+                            <div>{item.reward} {this.state.usdtSymbol}</div>
+                        </div>
+                    })}
                 </div>
                 <div className='mt20'></div>
             </div>
@@ -636,4 +718,4 @@ class MintPool extends Component {
     }
 }
 
-export default withNavigation(MintPool);
+export default withNavigation(Sale);

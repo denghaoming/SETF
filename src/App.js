@@ -7,6 +7,7 @@ import "./common.css"
 import './App.css'
 import MintPool from './pages/MintPool/MintPool'
 import Burn from './pages/Burn/Burn'
+import Sale from './pages/Sale/Sale'
 
 class App extends Component {
     state = { account: null, chainId: null, shortAccount: null }
@@ -72,7 +73,7 @@ class App extends Component {
                 <div className='App'>
                     <div>
                         <Routes>
-                            <Route path="/" exact element={<Burn />}></Route>
+                            <Route path="/" exact element={<Sale />}></Route>
                             <Route path="/mint" exact element={<MintPool />}></Route>
                             <Route path="/burn" exact element={<Burn />}></Route>
                         </Routes>
