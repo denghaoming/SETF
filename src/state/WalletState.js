@@ -14,7 +14,7 @@ class WalletState {
         //bsc
         MintPool: "0x7a72e51F7EFE18259cBfe9A763520AA0831B9953",
         BurnPool: "0x697590428a28671AC0b5D448f3C55CBB2f3DDd83",
-        Sale:"0x94a456C18466f4A6ee2bc2A80A285500D6d9DCf3"
+        Sale:"0x2F429C90983076363E16EA8D3Ab69d6842b88Ad3"
     }
 
     listeners = []

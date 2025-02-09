@@ -24,6 +24,8 @@ class MintPool extends Component {
         chainSymbol: 'BNB',
         inputAmount: '',
         inviteFees: [],
+        tokenRewardList: tokenRewardList,
+        partnerRewardList: partnerRewardList,
     }
     constructor(props) {
         super(props);
@@ -62,7 +64,7 @@ class MintPool extends Component {
     }
 
     _refreshInfoIntervel;
-    //15秒刷新一次数据
+    //20秒刷新一次数据
     refreshInfo() {
         if (this._refreshInfoIntervel) {
             clearInterval(this._refreshInfoIntervel);
@@ -118,8 +120,10 @@ class MintPool extends Component {
             }
             //首码地址
             let defaultInvitor = saleInfo[8];
+            //合伙人要求兑换数量
+            let partnerCondition = new BN(saleInfo[9], 10);
             //推荐奖励比例，0表示1代,分母1万，除以100就是百分比
-            let inviteFeesRet = saleInfo[9];
+            let inviteFeesRet = saleInfo[10];
             let len = inviteFeesRet.length;
             let inviteFees = [];
             for (let i = 0; i < len; ++i) {
@@ -170,73 +174,123 @@ class MintPool extends Component {
                 partnerAmount: partnerAmount,
                 totalPartnerReward: showFromWei(totalPartnerReward, usdtDecimals, 2),
                 totalReward: showFromWei(totalReward, usdtDecimals, 2),
+                partnerCondition: showFromWei(partnerCondition, tokenDecimals, 2),
             });
 
             let account = WalletState.wallet.account;
             if (account) {
                 //获取用户信息
                 let userInfoRet = await poolContract.methods.getUserInfo(account).call();
+                //usdt余额
+                let usdtBalance = new BN(userInfoRet[0], 10);
+                //usdt授权额度
+                let usdtAllowance = new BN(userInfoRet[1], 10);
                 //是否已经激活，激活才能邀请别人，购买，质押都会激活
-                let active = userInfoRet[0];
+                let isActive = userInfoRet[2];
+                //是否合伙人
+                let isPartner = userInfoRet[3];
+                //兑换代币数量
+                let tokenAmount = new BN(userInfoRet[4], 10);
+                //释放代币数量
+                let releseToken = new BN(userInfoRet[5], 10);
+                //领取代币数量
+                let claimedToken = new BN(userInfoRet[6], 10);
+                //邀请奖励U
+                let inviteReward = new BN(userInfoRet[7], 10);
+                //兑换奖励U
+                let tokenReward = new BN(userInfoRet[8], 10);
+                //合伙人奖励U
+                let partnerReward = new BN(userInfoRet[9], 10);
+                //待领取代币
+                let pendingToken = new BN(0);
+                if (releseToken.gt(claimedToken)) {
+                    pendingToken = releseToken.sub(claimedToken);
+                }
+
+                //用户团队信息
+                let userTeamInfo = await poolContract.methods.getUserTeamInfo(account).call();
                 //上级
-                let invitor = userInfoRet[1];
-                //下级人数
-                let binderLen = parseInt(userInfoRet[2]);
-                //代币余额
-                let tokenBalance = new BN(userInfoRet[3], 10);
-                //代币授权额度
-                let tokenAllowance = new BN(userInfoRet[4], 10);
-                //质押数量
-                let stakeAmount = new BN(userInfoRet[5], 10);
-                //累计已领取奖励数量
-                let accClaimed = new BN(userInfoRet[6], 10);
-                //质押邀请奖励
-                let stakeInviteReward = new BN(userInfoRet[7], 10);
-                //
-                let claimedNFT = userInfoRet[8];
+                let invitor = userTeamInfo[0];
+                //直推人数
+                let binderLen = parseInt(userTeamInfo[1]);
+                //团队人数
+                let teamNum = parseInt(userTeamInfo[2]);
                 this.setState({
-                    active: active,
+                    isActive: isActive,
+                    isPartner: isPartner,
                     invitor: invitor,
                     binderLen: binderLen,
-                    tokenBalance: tokenBalance,
-                    showTokenBalance: showFromWei(tokenBalance, tokenDecimals, 4),
-                    tokenAllowance: tokenAllowance,
-                    stakeAmount: stakeAmount,
-                    showStakeAmount: showFromWei(stakeAmount, tokenDecimals, 4),
-                    showAccClaimed: showFromWei(accClaimed, tokenDecimals, 4),
-                    showStakeInviteReward: showFromWei(stakeInviteReward, tokenDecimals, 4),
-                    claimedNFT: claimedNFT,
+                    teamNum: teamNum,
+                    usdtBalance: usdtBalance,
+                    showUsdtBalance: showFromWei(usdtBalance, usdtDecimals, 2),
+                    usdtAllowance: usdtAllowance,
+                    tokenAmount: showFromWei(tokenAmount, tokenDecimals, 2),
+                    inviteReward: showFromWei(inviteReward, usdtDecimals, 4),
+                    tokenReward: showFromWei(tokenReward, usdtDecimals, 4),
+                    partnerReward: showFromWei(partnerReward, usdtDecimals, 4),
                 })
-
-                //获取用户所有池子信息
-                let allPoolUserInfoRet = await poolContract.methods.getAllPoolUserInfo(account).call();
-                //质押数量
-                let amounts = allPoolUserInfoRet[0];
-                //待领取收益
-                let pendings = allPoolUserInfoRet[1];
-                //已领取收益
-                let claimeds = allPoolUserInfoRet[2];
-                //质押时间
-                let starts = allPoolUserInfoRet[3];
-                //邀请奖励
-                let inviteRewards = allPoolUserInfoRet[4];
-                //总待领取
-                let totalPending = new BN(0);
-                for (let i = 0; i < len; ++i) {
-                    let amount = new BN(amounts[i], 10);
-                    let pending = new BN(pendings[i], 10);
-                    let start = parseInt(starts[i]);
-                    //解锁时间戳
-                    let end = start + poolInfos[i].lockDuration;
-                    userInfos[i] = {
-                        showAmount: showFromWei(amount, tokenDecimals, 4),
-                        showPending: showFromWei(pending, tokenDecimals, 6),
-                        showUnclockTime: this.formatTime(end),
-                    };
-                    totalPending = totalPending.add(pending);
-                }
-                this.setState({ userInfos: userInfos, showTotalPending: showFromWei(totalPending, tokenDecimals, 6) });
             }
+
+            //获取每日兑换奖励列表
+            let tokenRewardList = [];
+            let startIndex = 0;
+            let pageSize = 200;
+            while (true) {
+                //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
+                let results = await poolContract.methods
+                    .getTokenRewards(startIndex, pageSize)
+                    .call();
+                let len = results.length;
+                for (let i = 0; i < len; ++i) {
+                    let item = results[i];
+                    let year = parseInt(item.year);
+                    let month = parseInt(item.month);
+                    let day = parseInt(item.day);
+                    let reward = new BN(item.reward, 10);
+                    tokenRewardList.push({
+                        date: this.formatDate(year, month, day),
+                        reward: showFromWei(reward, usdtDecimals, 2),
+                    });
+                }
+
+                startIndex += pageSize;
+                if (len < pageSize) {
+                    break;
+                }
+            }
+            this.setState({
+                tokenRewardList: tokenRewardList,
+            })
+
+            //获取每日合伙人奖励列表
+            let partnerRewardList = [];
+            startIndex = 0;
+            while (true) {
+                //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
+                let results = await poolContract.methods
+                    .getPartnerRewards(startIndex, pageSize)
+                    .call();
+                let len = results.length;
+                for (let i = 0; i < len; ++i) {
+                    let item = results[i];
+                    let year = parseInt(item.year);
+                    let month = parseInt(item.month);
+                    let day = parseInt(item.day);
+                    let reward = new BN(item.reward, 10);
+                    partnerRewardList.push({
+                        date: this.formatDate(year, month, day),
+                        reward: showFromWei(reward, usdtDecimals, 2),
+                    });
+                }
+
+                startIndex += pageSize;
+                if (len < pageSize) {
+                    break;
+                }
+            }
+            this.setState({
+                partnerRewardList: partnerRewardList,
+            })
         } catch (e) {
             console.log("getInfo", e.message);
             toast.show(e.message);
@@ -244,15 +298,24 @@ class MintPool extends Component {
         }
     }
 
-    //质押输入监听
-    handleDepositAmountChange(id, event) {
-        let depositAmounts = this.state.depositAmounts;
-        let value = depositAmounts[id];
+    //年月日
+    formatDate(year, month, day) {
+        if (month < 10) {
+            month = '0' + month;
+        }
+        if (day < 10) {
+            day = '0' + day;
+        }
+        return '' + year + month + day;
+    }
+
+    //输入监听
+    handleInputAmountChange(event) {
+        let value = this.inputAmount;
         if (event.target.validity.valid) {
             value = event.target.value;
         }
-        depositAmounts[id] = value;
-        this.setState({ depositAmounts: depositAmounts });
+        this.setState({ inputAmount: value });
     }
 
     //充值质押

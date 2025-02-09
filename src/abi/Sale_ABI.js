@@ -1282,6 +1282,11 @@ export const Sale_ABI = [
 				"type": "address"
 			},
 			{
+				"internalType": "uint256",
+				"name": "partnerCondition",
+				"type": "uint256"
+			},
+			{
 				"internalType": "uint256[]",
 				"name": "inviteFees",
 				"type": "uint256[]"
