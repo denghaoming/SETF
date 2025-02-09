@@ -9,12 +9,9 @@ class WalletState {
 
     config = {
         //test
-        // MintPool: "0xA446A2A650E1c285B64a446D051983FB3b9209Cc",
-        // BurnPool:"0x0d069bf40C457f4b289De37CCF48DfEB87A8741F",
+        Sale: "0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
         //bsc
-        MintPool: "0x7a72e51F7EFE18259cBfe9A763520AA0831B9953",
-        BurnPool: "0x697590428a28671AC0b5D448f3C55CBB2f3DDd83",
-        Sale:"0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
+        //Sale:"0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
     }
 
     listeners = []
