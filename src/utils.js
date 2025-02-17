@@ -142,3 +142,43 @@ export function getRef() {
     }
     return null;
 }
+
+const OFFSET19700101 = 2440588;
+
+export function _daysFromDate(year, month, day) {
+    if (year < 1970) {
+        return 0;
+    }
+    let _year = parseInt(year);
+    let _month = parseInt(month);
+    let _day = parseInt(day);
+
+    let __days = parseInt(_day - 32075 + parseInt((1461 * (_year + 4800 + parseInt((_month - 14) / 12))) / 4)
+        + parseInt((367 * (_month - 2 - parseInt(((_month - 14) / 12)) * 12)) / 12)
+        - parseInt((3 * parseInt(((_year + 4900 + parseInt((_month - 14) / 12)) / 100))) / 4) - OFFSET19700101);
+    return __days;
+}
+
+export function _daysToDate(
+    _days
+) {
+    let __days = parseInt(_days);
+
+    let L = parseInt(__days + 68569 + OFFSET19700101);
+    let N = parseInt((4 * L) / 146097);
+    L = parseInt(L - parseInt((146097 * N + 3) / 4));
+    let _year = parseInt((4000 * (L + 1)) / 1461001);
+    L = parseInt(L - parseInt((1461 * _year) / 4) + 31);
+    let _month = parseInt((80 * L) / 2447);
+    let _day = parseInt(L - parseInt((2447 * _month) / 80));
+    L = parseInt(_month / 11);
+    _month = parseInt(_month + 2 - 12 * L);
+    _year = parseInt(100 * (N - 49) + _year + L);
+
+    let d = {
+        year: _year,
+        month: _month,
+        day: _day,
+    }
+    return d;
+}

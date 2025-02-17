@@ -7,7 +7,7 @@ import toast from '../../components/toast/toast'
 import Web3 from 'web3'
 import { ERC20_ABI } from "../../abi/erc20"
 import { Sale_ABI } from '../../abi/Sale_ABI'
-import { showCountdownTime, showFromWei, showAccount, toWei, showLongAccount, getRef, showLongLongAccount } from '../../utils'
+import { showCountdownTime, showFromWei, showAccount, toWei, showLongAccount, getRef, showLongLongAccount, _daysFromDate, _daysToDate } from '../../utils'
 import BN from 'bn.js'
 
 import moment from 'moment'
@@ -271,6 +271,10 @@ class Sale extends Component {
             //获取每日兑换奖励列表
             let tokenRewardList = [];
             startIndex = 0;
+            //数据的第一个天数，距离1970年的天数
+            let firstTokenDays = 0;
+            //列表序号
+            let tokenIndex = 0;
             while (true) {
                 //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
                 let results = await poolContract.methods
@@ -282,11 +286,24 @@ class Sale extends Component {
                     let year = parseInt(item.year);
                     let month = parseInt(item.month);
                     let day = parseInt(item.day);
+                    //0的时候取第一数据的天数
+                    if (0 == firstTokenDays) {
+                        firstTokenDays = _daysFromDate(year, month, day);
+                    }
+                    //年月日为0，根据序号和第一天算出来年月日
+                    if (0 == year) {
+                        let d = _daysToDate(firstTokenDays + tokenIndex);
+                        year = d.year;
+                        month = d.month;
+                        day = d.day;
+                    }
                     let reward = new BN(item.reward, 10);
                     tokenRewardList.push({
                         date: this.formatDate(year, month, day),
                         reward: showFromWei(reward, usdtDecimals, 2),
                     });
+                    //序号加1
+                    tokenIndex++;
                 }
 
                 startIndex += pageSize;
@@ -301,6 +318,10 @@ class Sale extends Component {
             //获取每日合伙人奖励列表
             let partnerRewardList = [];
             startIndex = 0;
+            //数据的第一个天数，距离1970年的天数
+            let firstPartnerDays = 0;
+            //列表序号
+            let partnerIndex = 0;
             while (true) {
                 //返回的记录是从第一天开始发放奖励，连续每天的数据，就是天数是连续的，有可能奖励是0
                 let results = await poolContract.methods
@@ -312,11 +333,24 @@ class Sale extends Component {
                     let year = parseInt(item.year);
                     let month = parseInt(item.month);
                     let day = parseInt(item.day);
+                    //0的时候取第一数据的天数
+                    if (0 == firstPartnerDays) {
+                        firstPartnerDays = _daysFromDate(year, month, day);
+                    }
+                    //年月日为0，根据序号和第一天算出来年月日
+                    if (0 == year) {
+                        let d = _daysToDate(firstPartnerDays + partnerIndex);
+                        year = d.year;
+                        month = d.month;
+                        day = d.day;
+                    }
                     let reward = new BN(item.reward, 10);
                     partnerRewardList.push({
                         date: this.formatDate(year, month, day),
                         reward: showFromWei(reward, usdtDecimals, 2),
                     });
+                    //序号+1
+                    partnerIndex++;
                 }
 
                 startIndex += pageSize;
