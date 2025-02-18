@@ -9,9 +9,9 @@ class WalletState {
 
     config = {
         //test
-        Sale: "0x192780Bc3edE7630888adAb7196982970ba849f9"
+        //Sale: "0x192780Bc3edE7630888adAb7196982970ba849f9"
         //bsc
-        //Sale:"0x1302408dF95B99c7c724Bf5740B0036929D92a3a"
+        Sale:"0xF229Fe91f686C9268d1e81944627688612727D48"
     }
 
     listeners = []
